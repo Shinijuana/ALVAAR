@@ -1,207 +1,260 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AR Astronave con SLAM</title>
-  
-  <!-- A-Frame for AR rendering -->
-  <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.5.0/math.min.js"></script>
-  <!-- OpenCV.js -->
-  <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()" onerror="onOpenCvError()"></script>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
+    <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+    <title>AlvaAR Camera</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  <style>
-    body { margin: 0; overflow: hidden; }
-    #video, #canvas { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; }
-    a-scene { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
-    #debugCanvas { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 2; pointer-events: none; }
-  </style>
+        html,
+        body {
+            font-family: 'Helvetica', sans-serif;
+            overflow: hidden;
+            background: #000;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: block;
+            overflow: hidden;
+            line-height: 0;
+        }
+
+        #container > * {
+            position: absolute;
+            display: block;
+            user-select: none;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            animation: fadeIn 1.2s;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #container > video {
+            object-fit: cover;
+            object-position: 50% 50%;
+        }
+
+        #splash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            opacity: 1;
+        }
+
+        #overlay {
+            position: absolute;
+            font-size: 16px;
+            z-index: 2;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        #overlay::before{
+            position: absolute;
+            width: 100%;
+            white-space: pre-wrap;
+            content: "Please allow access \A to your camera.";
+            top:calc(50% + 50px);
+            text-align: center;
+            color: #949494;
+        }
+
+        #overlay button {
+            background: transparent;
+            border: 1px solid rgb(255, 255, 255);
+            border-radius: 4px;
+            color: #ffffff;
+            padding: 12px 18px;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+            }
+            50% {
+                opacity: 0.6;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        @media screen and (max-device-width: 480px) and (orientation: landscape) {
+            #container {
+                display: none;
+            }
+
+            body::before {
+                content: "Rotate device to portrait mode.";
+                color: white;
+            }
+        }
+
+        @media screen and (max-device-width: 480px) and (orientation: portrait) {
+            #container {
+                display: block;
+            }
+
+            body::before {
+                content: none;
+            }
+        }
+    </style>
 </head>
 <body>
+<div id="container"></div>
+<div id="overlay">
+    <button id="start_button">Start</button>
+    <div id="splash"></div>
+</div>
+<script type="module">
+    import { Stats } from "./assets/stats.js";
+    import { AlvaAR } from './assets/alva_ar.js';
+    import { ARCamView } from "./assets/view.js";
+    import { Camera, onFrame, resize2cover } from "./assets/utils.js";
 
-<a-scene embedded renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-  <a-assets>
-      <a-asset-item id="astro" src="ASTRONAVE.glb"></a-asset-item>
-  </a-assets>
+    function main()
+    {
+        const config = {
+            video: {
+                facingMode: 'environment',
+                aspectRatio: 16 / 9,
+                width: { ideal: 1280 }
+            },
+            audio: false
+        }
 
-  <a-entity id="astronave" position="0 0 -5" gltf-model="#astro" scale=".7 .7 .7"></a-entity>
-  <a-camera id="ar-camera" position="0 0 0" look-controls="enabled: false" class="clickable"></a-camera>
-  <a-plane id="plane" position="0 0 0" rotation="-90 0 0" width="10" height="10" color="#CCC" opacity="0.5"></a-plane>
-</a-scene>
+        const $container = document.getElementById( 'container' );
+        const $view = document.createElement( 'div' );
+        const $canvas = document.createElement( 'canvas' );
+        const $overlay = document.getElementById( 'overlay' );
+        const $start = document.getElementById( 'start_button' );
+        const $splash = document.getElementById( 'splash' );
+        const splashFadeTime = 800;
 
-<!-- Video Feed e canvas per debug -->
-<video id="video" autoplay></video>
-<canvas id="canvas"></canvas>
-<canvas id="debugCanvas"></canvas>
+        $splash.style.transition = `opacity ${ splashFadeTime / 1000 }s ease`;
+        $splash.style.opacity = 0;
 
-<script type="text/javascript">
-let cvLoaded = false;
-let isPlaneAnchored = false; // Piano ancorato?
-let pointsPreviousFrame = []; // Per tracking
+        async function demo( media )
+        {
+            const $video = media.el;
 
-// Aggiunta di filtri di Kalman per la posa
-class KalmanFilter {
-  constructor(processNoise, measurementNoise, estimatedError) {
-    this.processNoise = processNoise;
-    this.measurementNoise = measurementNoise;
-    this.estimatedError = estimatedError;
-    this.posteriEstimate = 0;
-    this.posteriError = 1;
-  }
+            const size = resize2cover( $video.videoWidth, $video.videoHeight, $container.clientWidth, $container.clientHeight );
 
-  update(measurement) {
-    const prioriEstimate = this.posteriEstimate;
-    const prioriError = this.posteriError + this.processNoise;
-    const blendingFactor = prioriError / (prioriError + this.measurementNoise);
-    this.posteriEstimate = prioriEstimate + blendingFactor * (measurement - prioriEstimate);
-    this.posteriError = (1 - blendingFactor) * prioriError;
-    return this.posteriEstimate;
-  }
-}
+            $canvas.width = $container.clientWidth;
+            $canvas.height = $container.clientHeight;
+            $video.style.width = size.width + 'px';
+            $video.style.height = size.height + 'px';
 
-// Kalman filters
-const kalmanX = new KalmanFilter(0.05, 0.1, 0.1); // Adjust process noise for stability
-const kalmanY = new KalmanFilter(0.05, 0.1, 0.1);
-const kalmanZ = new KalmanFilter(0.05, 0.1, 0.1); // Add Kalman for Z axis
+            const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
+            const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
+            const view = new ARCamView( $view, $canvas.width, $canvas.height );
 
-let planeStableZ = 0; // Track a stable Z for anchoring
+            Stats.add( 'total' );
+            Stats.add( 'video' );
+            Stats.add( 'slam' );
 
-function onOpenCvReady() {
-  cvLoaded = true;
-  console.log('OpenCV.js è pronto.');
-  initializeApp();
-}
+            $container.appendChild( $canvas );
+            $container.appendChild( $view );
 
-function onOpenCvError() {
-  console.error('Errore nel caricamento di OpenCV.js.');
-}
+            document.body.appendChild( Stats.el );
+            document.body.addEventListener( "click", () => alva.reset(), false );
 
-function initializeApp() {
-  const video = document.getElementById('video');
-  const canvas = document.getElementById('canvas');
-  const debugCanvas = document.getElementById('debugCanvas');
-  const debugCtx = debugCanvas.getContext('2d');
-  const ctx = canvas.getContext('2d');
-  const camera = document.getElementById('ar-camera');
+            onFrame( () =>
+            {
+                Stats.next();
+                Stats.start( 'total' );
 
-  // Usa sensori di movimento per migliorare la stima della posa (fusione sensoriale)
-  window.addEventListener('deviceorientation', (event) => {
-    const alpha = event.alpha ? event.alpha.toFixed(2) : 0; // Rotazione Z
-    const beta = event.beta ? event.beta.toFixed(2) : 0;    // Rotazione X
-    const gamma = event.gamma ? event.gamma.toFixed(2) : 0; // Rotazione Y
+                ctx.clearRect( 0, 0, $canvas.width, $canvas.height );
 
-    camera.setAttribute('rotation', `${beta} ${alpha} ${gamma}`);
-  });
+                if( !document['hidden'] )
+                {
+                    Stats.start( 'video' );
+                    ctx.drawImage( $video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height );
+                    const frame = ctx.getImageData( 0, 0, $canvas.width, $canvas.height );
+                    Stats.stop( 'video' );
 
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-    .then((stream) => {
-      video.srcObject = stream;
-      video.addEventListener('loadedmetadata', () => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        debugCanvas.width = canvas.width;
-        debugCanvas.height = canvas.height;
-        video.play();
-      });
-      video.addEventListener('play', () => {
-        processVideo();
-      });
-    })
-    .catch((error) => {
-      console.error('Errore nell\'accesso alla fotocamera: ', error);
-    });
+                    Stats.start( 'slam' );
+                    const pose = alva.findCameraPose( frame );
+                    Stats.stop( 'slam' );
 
-  function detectFeatures() {
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    
-    const src = cv.matFromImageData(imageData);
-    const gray = new cv.Mat();
+                    if( pose )
+                    {
+                        view.updateCameraPose( pose );
+                    }
+                    else
+                    {
+                        view.lostCamera();
 
-    // Convert to grayscale
-    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                        const dots = alva.getFramePoints();
 
-    // Use ORB for feature detection
-    const orb = new cv.ORB();
-    const keypoints = new cv.KeyPointVector();
-    const descriptors = new cv.Mat();
-    orb.detectAndCompute(gray, new cv.Mat(), keypoints, descriptors);
+                        for( const p of dots )
+                        {
+                            ctx.fillStyle = 'white';
+                            ctx.fillRect( p.x, p.y, 2, 2 );
+                        }
+                    }
+                }
 
-    const points = [];
-    for (let i = 0; i < keypoints.size(); i++) {
-      const pt = keypoints.get(i).pt;
-      points.push({ x: pt.x, y: pt.y });
+                Stats.stop( 'total' );
+                Stats.render();
+
+                return true;
+            }, 30 );
+        }
+
+        setTimeout( () =>
+        {
+            $splash.remove();
+
+            $start.addEventListener( 'click', () =>
+            {
+                $overlay.remove();
+
+                Camera.Initialize( config ).then( media => demo( media ) ).catch( error => alert( 'Camera ' + error ) );
+
+            }, { once: true } );
+
+        }, splashFadeTime );
     }
 
-    src.delete(); gray.delete(); keypoints.delete(); descriptors.delete();
-    return points;
-  }
-
-  function filterPoints(points) {
-    return points.filter(p => p.x >= 0 && p.y >= 0 && p.x < canvas.width && p.y < canvas.height);
-  }
-
-  function estimateCameraPose(points) {
-    if (points.length > 100) {
-      const avgX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
-      const avgY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-
-      const x3D = (avgX / canvas.width) * 10 - 5;
-      const y3D = Math.max((avgY / canvas.height) * 10 - 5, 0);
-
-      // Apply Kalman filter for smoother movement
-      const smoothedX = kalmanX.update(x3D);
-      const smoothedY = kalmanY.update(y3D);
-      const smoothedZ = kalmanZ.update(planeStableZ); // Keep Z stable
-
-      // Update camera position with stable values
-      camera.setAttribute('position', `${smoothedX} ${smoothedY} ${smoothedZ}`);
-      console.log(`Posizione della camera aggiornata: X=${smoothedX}, Y=${smoothedY}, Z=${smoothedZ}`);
-    } else {
-      console.log("Nessun punto rilevato.");
-    }
-  }
-
-  function anchorPlane(points) {
-    const avgX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
-    const avgY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-
-    const newX = (avgX / canvas.width) * 10 - 5;
-    const newY = Math.max((avgY / canvas.height) * 10 - 5, 0);
-    const newZ = planeStableZ; // Use stable Z for anchoring
-
-    const existingPlane = document.querySelector('a-plane');
-    if (existingPlane) {
-      existingPlane.setAttribute('position', `${newX} ${newY} ${newZ}`);
-      console.log(`Piano aggiornato a: X=${newX}, Y=${newY}, Z=${newZ}`);
-    } else {
-      const planeElement = document.createElement('a-plane');
-      planeElement.setAttribute('position', `${newX} ${newY} ${newZ}`);
-      planeElement.setAttribute('width', '10');
-      planeElement.setAttribute('height', '10');
-      planeElement.setAttribute('color', '#00ff00');
-      document.querySelector('a-scene').appendChild(planeElement);
-      isPlaneAnchored = true;
-      console.log(`Piano ancorato a: X=${newX}, Y=${newY}, Z=${newZ}`);
-    }
-  }
-
-  function processVideo() {
-    if (!cvLoaded) {
-      console.error('OpenCV.js non è stato caricato.');
-      return;
-    }
-
-    const points = filterPoints(detectFeatures());
-    console.log('Punti rilevati:', points);
-
-    estimateCameraPose(points);
-
-    requestAnimationFrame(processVideo);
-  }
-}
+    window.addEventListener( 'load', main );
 </script>
-
 </body>
 </html>
