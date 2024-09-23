@@ -281,7 +281,3 @@ class ARSimpleMap
 }
 
 export { ARCamView, ARCamIMUView, ARSimpleView, ARSimpleMap }
-
-
-
-export { ARCamView, ARCamIMUView, ARSimpleView, ARSimpleMap };
