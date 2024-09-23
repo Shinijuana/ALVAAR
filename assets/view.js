@@ -128,7 +128,7 @@ class ARCamIMUView {
         this.scene.children.forEach(obj => obj.visible = false);
     }
 
-    addObjectAt(x, y, scale = 1.0) {
+     addObjectAt(x, y, scale = 1.0) {
         const el = this.renderer.domElement;
 
         const coord = new THREE.Vector2((x / el.offsetWidth) * 2 - 1, -(y / el.offsetHeight) * 2 + 1);
@@ -140,19 +140,19 @@ class ARCamIMUView {
         if (intersections.length > 0) {
             const point = intersections[0].point;
 
-            const object = new THREE.Mesh(
-                new THREE.IcosahedronGeometry(1, 0),
-                new THREE.MeshNormalMaterial({ flatShading: true })
-            );
-
-            object.scale.set(scale, scale, scale);
-            object.position.set(point.x, point.y, point.z);
-            object.custom = true;
-
-            this.scene.add(object);
+            // Carica l'astronave invece di creare un icosaedro
+            const loader = new GLTFLoader();
+            loader.load('./ASTRONAVE.glb', (gltf) => {
+                const object = gltf.scene;
+                object.scale.set(scale, scale, scale); // Imposta la scala
+                object.position.set(point.x, point.y, point.z); // Imposta la posizione
+                object.custom = true;
+                this.scene.add(object); // Aggiungi l'astronave alla scena
+            }, undefined, function (error) {
+                console.error(error);
+            });
         }
     }
-
     reset() {
         this.scene.children.filter(o => o.custom).forEach(o => this.scene.remove(o));
     }
