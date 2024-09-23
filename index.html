@@ -31,7 +31,7 @@
     // Function to load the .glb model
     function loadModel() {
         const loader = new THREE.GLTFLoader();
-        loader.load('./ASTRONAVE.glb', function (gltf) {
+        loader.load('ASTRONAVE.glb', function (gltf) {
             model = gltf.scene;
             scene.add(model);
 
