@@ -96,7 +96,7 @@ class ARCamIMUView {
             })
         );
 
-        this.ground.rotation.x = Math.PI / 2; // 90 deg
+        this.ground.rotation.x = 0; // 90 deg
         this.ground.position.y = 0; // Imposta la posizione Y del piano a 0
 
         this.scene = new THREE.Scene();
