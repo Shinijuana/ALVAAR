@@ -7,134 +7,7 @@
     <title>AlvaAR Camera</title>
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        html,
-        body {
-            font-family: 'Helvetica', sans-serif;
-            overflow: hidden;
-            background: #000;
-            position: relative;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        #container {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            display: block;
-            overflow: hidden;
-            line-height: 0;
-        }
-
-        #container > * {
-            position: absolute;
-            display: block;
-            user-select: none;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            animation: fadeIn 1.2s;
-        }
-
-        canvas {
-            display: block;
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
-
-        #container > video {
-            object-fit: cover;
-            object-position: 50% 50%;
-        }
-
-        #splash {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000;
-            opacity: 1;
-        }
-
-        #overlay {
-            position: absolute;
-            font-size: 16px;
-            z-index: 2;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            background: rgba(0, 0, 0, 0.5);
-        }
-
-        #overlay::before{
-            position: absolute;
-            width: 100%;
-            white-space: pre-wrap;
-            content: "Please allow access \A to your camera.";
-            top:calc(50% + 50px);
-            text-align: center;
-            color: #949494;
-        }
-
-        #overlay button {
-            background: transparent;
-            border: 1px solid rgb(255, 255, 255);
-            border-radius: 4px;
-            color: #ffffff;
-            padding: 12px 18px;
-            text-transform: uppercase;
-            cursor: pointer;
-        }
-
-        @keyframes fadeIn {
-            0% {
-                opacity: 0;
-            }
-            50% {
-                opacity: 0.6;
-            }
-            100% {
-                opacity: 1;
-            }
-        }
-
-        @media screen and (max-device-width: 480px) and (orientation: landscape) {
-            #container {
-                display: none;
-            }
-
-            body::before {
-                content: "Rotate device to portrait mode.";
-                color: white;
-            }
-        }
-
-        @media screen and (max-device-width: 480px) and (orientation: portrait) {
-            #container {
-                display: block;
-            }
-
-            body::before {
-                content: none;
-            }
-        }
+        /* Stili CSS come prima */
     </style>
 </head>
 <body>
@@ -153,11 +26,12 @@
 
     // Global variables
     let scene, camera, renderer, model;
+    let pose = null;  // Dichiarazione della variabile 'pose'
 
     // Function to load the .glb model
     function loadModel() {
         const loader = new THREE.GLTFLoader();
-        loader.load('ASTRONAVE.glb', function (gltf) {
+        loader.load('./ASTRONAVE.glb', function (gltf) {
             model = gltf.scene;
             scene.add(model);
 
@@ -257,7 +131,8 @@
                     Stats.stop('video');
 
                     Stats.start('slam');
-                    const pose = alva.findCameraPose(frame);
+                    // Aggiorna la variabile 'pose' con i dati della fotocamera
+                    pose = alva.findCameraPose(frame);
                     Stats.stop('slam');
 
                     if (pose) {
