@@ -136,6 +136,9 @@
             }
         }
     </style>
+    <!-- Include Three.js and GLTFLoader from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three-gltf-loader@1.111.0/index.min.js"></script>
 </head>
 <body>
 <div id="container"></div>
@@ -148,7 +151,6 @@
     import { AlvaAR } from './assets/alva_ar.js';
     import { ARCamView } from "./assets/view.js";
     import { Camera, onFrame, resize2cover } from "./assets/utils.js";
-    import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
     function main() {
         const config = {
@@ -186,7 +188,7 @@
             const view = new ARCamView($view, $canvas.width, $canvas.height);
 
             // Carica il modello GLB
-            const loader = new GLTFLoader();
+            const loader = new THREE.GLTFLoader(); // Usa il loader dal CDN
             let model;
 
             loader.load('ASTRONAVE.glb', (gltf) => {
