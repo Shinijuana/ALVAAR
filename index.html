@@ -63,7 +63,7 @@
             const view = new ARCamView($view, $canvas.width, $canvas.height);
 
             // Carica il modello GLB
-            loader.load('path/to/ASTRONAVE.glb', (gltf) => {
+            loader.load('ASTRONAVE.glb', (gltf) => {
                 const model = gltf.scene;
                 view.scene.add(model); // Aggiungi il modello alla scena
             }, undefined, (error) => {
