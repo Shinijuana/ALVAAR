@@ -40,7 +40,6 @@ class ARCamView {
             this.object = gltf.scene;
             this.object.scale.set(scale, scale, scale);
             this.object.position.set(x, y, z);
-            this.object.rotation.x = Math.PI / 2; // Ruota di 90 gradi sull'asse X
             this.object.visible = false;
             this.scene.add(this.object);
         }, undefined, function (error) {
