@@ -19,7 +19,7 @@ class ARCamView {
         this.scene = new THREE.Scene();
         this.scene.add(new THREE.AmbientLight(0x808080));
         this.scene.add(new THREE.HemisphereLight(0x404040, 0xf0f0f0, 1));
-
+        
         // Aggiunta di luci direzionali
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
         directionalLight.position.set(5, 10, 7.5);
@@ -32,16 +32,18 @@ class ARCamView {
         this.scene.add(spotLight);
 
         this.scene.add(this.camera);
+
         container.appendChild(this.renderer.domElement);
 
         // Caricamento del modello ASTRONAVE.glb
         const loader = new GLTFLoader();
         loader.load('./ASTRONAVE.glb', (gltf) => {
             this.object = gltf.scene;
-            this.object.scale.set(scale, scale, scale);
-            this.object.position.set(x, y, z);
-            this.object.visible = false;
-            this.scene.add(this.object);
+            this.object.scale.set(scale, scale, scale); // Imposta la scala
+            this.object.position.set(x, y, z); // Imposta la posizione
+            this.object.rotation.x = -Math.PI / 2; // Ruota di -90 gradi sull'asse X
+            this.object.visible = false; // Lo rendiamo visibile solo quando necessario
+            this.scene.add(this.object); // Aggiungi l'oggetto alla scena
         }, undefined, function (error) {
             console.error(error);
         });
@@ -69,6 +71,7 @@ class ARCamView {
     }
 }
 
+// Classe ARCamIMUView
 class ARCamIMUView {
     constructor(container, width, height) {
         this.applyPose = AlvaARConnectorTHREE.Initialize(THREE);
@@ -93,8 +96,8 @@ class ARCamIMUView {
             })
         );
 
-        this.ground.rotation.x = Math.PI / 2; // 90 deg
-        this.ground.position.y = -10;
+        this.ground.rotation.x = 0; // 90 deg
+        this.ground.position.y = 0; // Imposta la posizione Y del piano a 0
 
         this.scene = new THREE.Scene();
         this.scene.add(new THREE.AmbientLight(0x808080));
@@ -137,18 +140,16 @@ class ARCamIMUView {
         if (intersections.length > 0) {
             const point = intersections[0].point;
 
-            // Carica l'astronave invece di creare un icosaedro
-            const loader = new GLTFLoader();
-            loader.load('./ASTRONAVE.glb', (gltf) => {
-                const object = gltf.scene;
-                object.scale.set(scale, scale, scale);
-                object.position.set(point.x, point.y, point.z);
-                object.rotation.x = Math.PI / 2; // Ruota di 90 gradi sull'asse X
-                object.custom = true;
-                this.scene.add(object);
-            }, undefined, function (error) {
-                console.error(error);
-            });
+            const object = new THREE.Mesh(
+                new THREE.IcosahedronGeometry(1, 0),
+                new THREE.MeshNormalMaterial({ flatShading: true })
+            );
+
+            object.scale.set(scale, scale, scale);
+            object.position.set(point.x, point.y, point.z);
+            object.custom = true;
+
+            this.scene.add(object);
         }
     }
 
@@ -157,6 +158,7 @@ class ARCamIMUView {
     }
 }
 
+// Classe ARSimpleView
 class ARSimpleView {
     constructor(container, width, height, mapView = null) {
         this.applyPose = AlvaARConnectorTHREE.Initialize(THREE);
@@ -231,6 +233,7 @@ class ARSimpleView {
     }
 }
 
+// Classe ARSimpleMap
 class ARSimpleMap {
     constructor(container, width, height) {
         this.renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -240,39 +243,30 @@ class ARSimpleMap {
         this.renderer.domElement.style.width = width + 'px';
         this.renderer.domElement.style.height = height + 'px';
 
-        this.camera = new THREE.PerspectiveCamera(50, width / height, 0.01, 1000);
-        this.camera.position.set(-1, 2, 2);
-
-        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-        this.controls.enableDamping = true;
-        this.controls.dampingFactor = 0.1;
-        this.controls.minDistance = 0.1;
-        this.controls.maxDistance = 1000;
-
-        this.gridHelper = new THREE.GridHelper(150, 100);
-        this.gridHelper.position.y = -1;
-
-        this.axisHelper = new THREE.AxesHelper(0.25);
-
-        this.camHelper = null;
-
+        this.camera = new THREE.PerspectiveCamera(50, width / height, 0.01, 10000);
         this.scene = new THREE.Scene();
-        this.scene.add(new THREE.AmbientLight(0xefefef));
-        this.scene.add(new THREE.HemisphereLight(0x404040, 0xf0f0f0, 1));
-        this.scene.add(this.gridHelper);
-        this.scene.add(this.axisHelper);
+        this.scene.add(new THREE.AmbientLight(0x404040));
 
         container.appendChild(this.renderer.domElement);
+    }
 
-        const render = () => {
-            this.controls.update();
-            this.renderer.render(this.scene, this.camera);
+    render() {
+        this.renderer.render(this.scene, this.camera);
+    }
 
-            requestAnimationFrame(render);
-        }
+    addObject(object) {
+        this.scene.add(object);
+    }
 
-        render();
+    removeObject(object) {
+        this.scene.remove(object);
+    }
+
+    updateCamera(pose) {
+        this.camera.quaternion.set(pose.orientation[0], pose.orientation[1], pose.orientation[2], pose.orientation[3]);
+        this.camera.position.set(pose.position[0], pose.position[1], pose.position[2]);
     }
 }
+
 
 export { ARCamView, ARCamIMUView, ARSimpleView, ARSimpleMap };
