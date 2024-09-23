@@ -19,8 +19,19 @@ class ARCamView {
         this.scene = new THREE.Scene();
         this.scene.add(new THREE.AmbientLight(0x808080));
         this.scene.add(new THREE.HemisphereLight(0x404040, 0xf0f0f0, 1));
-        this.scene.add(this.camera);
 
+        // Aggiunta di luci direzionali
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7.5);
+        this.scene.add(directionalLight);
+
+        // Aggiunta di una luce spot
+        const spotLight = new THREE.SpotLight(0xffffff);
+        spotLight.position.set(10, 10, 10);
+        spotLight.castShadow = true;
+        this.scene.add(spotLight);
+
+        this.scene.add(this.camera);
         container.appendChild(this.renderer.domElement);
 
         // Caricamento del modello ASTRONAVE.glb
@@ -29,6 +40,7 @@ class ARCamView {
             this.object = gltf.scene;
             this.object.scale.set(scale, scale, scale);
             this.object.position.set(x, y, z);
+            this.object.rotation.x = Math.PI / 2; // Ruota di 90 gradi sull'asse X
             this.object.visible = false;
             this.scene.add(this.object);
         }, undefined, function (error) {
@@ -130,10 +142,11 @@ class ARCamIMUView {
             const loader = new GLTFLoader();
             loader.load('./ASTRONAVE.glb', (gltf) => {
                 const object = gltf.scene;
-                object.scale.set(scale, scale, scale); // Imposta la scala
-                object.position.set(point.x, point.y, point.z); // Imposta la posizione
+                object.scale.set(scale, scale, scale);
+                object.position.set(point.x, point.y, point.z);
+                object.rotation.x = Math.PI / 2; // Ruota di 90 gradi sull'asse X
                 object.custom = true;
-                this.scene.add(object); // Aggiungi l'astronave alla scena
+                this.scene.add(object);
             }, undefined, function (error) {
                 console.error(error);
             });
