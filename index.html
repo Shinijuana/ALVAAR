@@ -83,12 +83,12 @@
             background: rgba(0, 0, 0, 0.5);
         }
 
-        #overlay::before{
+        #overlay::before {
             position: absolute;
             width: 100%;
             white-space: pre-wrap;
             content: "Please allow access \A to your camera.";
-            top:calc(50% + 50px);
+            top: calc(50% + 50px);
             text-align: center;
             color: #949494;
         }
@@ -148,9 +148,9 @@
     import { AlvaAR } from './assets/alva_ar.js';
     import { ARCamView } from "./assets/view.js";
     import { Camera, onFrame, resize2cover } from "./assets/utils.js";
+    import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-    function main()
-    {
+    function main() {
         const config = {
             video: {
                 facingMode: 'environment',
@@ -160,101 +160,105 @@
             audio: false
         }
 
-        const $container = document.getElementById( 'container' );
-        const $view = document.createElement( 'div' );
-        const $canvas = document.createElement( 'canvas' );
-        const $overlay = document.getElementById( 'overlay' );
-        const $start = document.getElementById( 'start_button' );
-        const $splash = document.getElementById( 'splash' );
+        const $container = document.getElementById('container');
+        const $view = document.createElement('div');
+        const $canvas = document.createElement('canvas');
+        const $overlay = document.getElementById('overlay');
+        const $start = document.getElementById('start_button');
+        const $splash = document.getElementById('splash');
         const splashFadeTime = 800;
 
-        $splash.style.transition = `opacity ${ splashFadeTime / 1000 }s ease`;
+        $splash.style.transition = `opacity ${splashFadeTime / 1000}s ease`;
         $splash.style.opacity = 0;
 
-        async function demo( media )
-        {
+        async function demo(media) {
             const $video = media.el;
 
-            const size = resize2cover( $video.videoWidth, $video.videoHeight, $container.clientWidth, $container.clientHeight );
+            const size = resize2cover($video.videoWidth, $video.videoHeight, $container.clientWidth, $container.clientHeight);
 
             $canvas.width = $container.clientWidth;
             $canvas.height = $container.clientHeight;
             $video.style.width = size.width + 'px';
             $video.style.height = size.height + 'px';
 
-            const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
-            const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
-            const view = new ARCamView( $view, $canvas.width, $canvas.height );
+            const ctx = $canvas.getContext('2d', { alpha: false, desynchronized: true });
+            const alva = await AlvaAR.Initialize($canvas.width, $canvas.height);
+            const view = new ARCamView($view, $canvas.width, $canvas.height);
 
-            Stats.add( 'total' );
-            Stats.add( 'video' );
-            Stats.add( 'slam' );
+            // Carica il modello GLB
+            const loader = new GLTFLoader();
+            let model;
 
-            $container.appendChild( $canvas );
-            $container.appendChild( $view );
+            loader.load('ASTRONAVE.glb', (gltf) => {
+                model = gltf.scene;
+                view.scene.add(model); // Aggiungi il modello alla scena
+            }, undefined, (error) => {
+                console.error(error);
+            });
 
-            document.body.appendChild( Stats.el );
-            document.body.addEventListener( "click", () => alva.reset(), false );
+            Stats.add('total');
+            Stats.add('video');
+            Stats.add('slam');
 
-            onFrame( () =>
-            {
+            $container.appendChild($canvas);
+            $container.appendChild($view);
+
+            document.body.appendChild(Stats.el);
+            document.body.addEventListener("click", () => alva.reset(), false);
+
+            onFrame(() => {
                 Stats.next();
-                Stats.start( 'total' );
+                Stats.start('total');
 
-                ctx.clearRect( 0, 0, $canvas.width, $canvas.height );
+                ctx.clearRect(0, 0, $canvas.width, $canvas.height);
 
-                if( !document['hidden'] )
-                {
-                    Stats.start( 'video' );
-                    ctx.drawImage( $video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height );
-                    const frame = ctx.getImageData( 0, 0, $canvas.width, $canvas.height );
-                    Stats.stop( 'video' );
+                if (!document['hidden']) {
+                    Stats.start('video');
+                    ctx.drawImage($video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height);
+                    const frame = ctx.getImageData(0, 0, $canvas.width, $canvas.height);
+                    Stats.stop('video');
 
-                    Stats.start( 'slam' );
-                    const pose = alva.findCameraPose( frame );
-                    Stats.stop( 'slam' );
+                    Stats.start('slam');
+                    const pose = alva.findCameraPose(frame);
+                    Stats.stop('slam');
 
-                    if( pose )
-                    {
-                        view.updateCameraPose( pose );
-                    }
-                    else
-                    {
+                    if (pose) {
+                        view.updateCameraPose(pose);
+                        if (model) {
+                            model.rotation.y += 0.01; // Esempio di rotazione del modello
+                        }
+                    } else {
                         view.lostCamera();
-
                         const dots = alva.getFramePoints();
 
-                        for( const p of dots )
-                        {
+                        for (const p of dots) {
                             ctx.fillStyle = 'white';
-                            ctx.fillRect( p.x, p.y, 2, 2 );
+                            ctx.fillRect(p.x, p.y, 2, 2);
                         }
                     }
                 }
 
-                Stats.stop( 'total' );
+                Stats.stop('total');
                 Stats.render();
 
                 return true;
-            }, 30 );
+            }, 30);
         }
 
-        setTimeout( () =>
-        {
+        setTimeout(() => {
             $splash.remove();
 
-            $start.addEventListener( 'click', () =>
-            {
+            $start.addEventListener('click', () => {
                 $overlay.remove();
 
-                Camera.Initialize( config ).then( media => demo( media ) ).catch( error => alert( 'Camera ' + error ) );
+                Camera.Initialize(config).then(media => demo(media)).catch(error => alert('Camera ' + error));
 
-            }, { once: true } );
+            }, { once: true });
 
-        }, splashFadeTime );
+        }, splashFadeTime);
     }
 
-    window.addEventListener( 'load', main );
+    window.addEventListener('load', main);
 </script>
 </body>
 </html>
