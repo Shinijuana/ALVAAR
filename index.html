@@ -1,10 +1,11 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
     <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
-    <title>AlvaAR Video</title>
+    <title>AlvaAR IMU</title>
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <style>
         * {
@@ -13,186 +14,255 @@
             box-sizing: border-box;
         }
 
-        *:focus {
-            outline: none !important
-        }
-
         html,
         body {
             font-family: 'Helvetica', sans-serif;
-            width: 100vw;
-            height: 100vh;
-            font-size: 12px;
-            font-weight: 300;
-            background: #fff;
+            overflow: hidden;
+            background: #000;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         #container {
-            padding-bottom: 50px;
-            text-align: center;
-            display: none;
             position: relative;
-            user-select: none;
+            width: 100%;
+            height: 100%;
+            display: block;
+            overflow: hidden;
+            line-height: 0;
         }
 
-        #container::after {
-            content: "Click on video to add 3d objects";
-            text-align: center;
+        #container > * {
             position: absolute;
-            bottom: 0;
+            display: block;
+            user-select: none;
+            top: 0;
             left: 0;
             width: 100%;
+            height: 100%;
+            animation: fadeIn 1.2s;
         }
 
-        #container > div {
-            display: inline-flex;
-            vertical-align: top;
-            margin: 100px 15px 0 15px;
-            padding: 0;
-            position: relative;
-            user-select: none;
-            outline: 1px solid #d20000;
-        }
-
-        #container > div > canvas {
+        canvas {
+            display: block;
             position: absolute;
-            left: 0;
             top: 0;
-            user-select: none;
+            left: 0;
         }
 
-        #container > div > canvas:first-child {
-            display: inline-block;
-            position: relative;
+        #container > video {
+            object-fit: cover;
+            object-position: 50% 50%;
         }
 
-        .tracking #container > div {
-            outline: 1px solid #bebebe;
+        #splash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            opacity: 1;
         }
 
-        @media only screen and (max-device-width: 800px) {
-            body {
-                background: #000;
+        #overlay {
+            position: absolute;
+            font-size: 16px;
+            z-index: 2;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        #overlay::before {
+            position: absolute;
+            width: 100%;
+            white-space: pre-wrap;
+            content: "Please allow access to \A your camera and motion sensor.";
+            top: calc(50% + 50px);
+            text-align: center;
+            color: #949494;
+        }
+
+        #overlay button {
+            background: transparent;
+            border: 1px solid rgb(255, 255, 255);
+            border-radius: 4px;
+            color: #ffffff;
+            padding: 12px 18px;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
             }
+            50% {
+                opacity: 0.6;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
 
+        @media screen and (max-device-width: 480px) and (orientation: landscape) {
             #container {
-                padding-bottom: 0;
-                text-align: center;
-                background: #000;
-            }
-
-            #container::after {
                 display: none;
-                content: '';
             }
 
-            #container > div {
-                margin: 0;
-                padding: 0;
-                box-shadow: none;
+            body::before {
+                content: "Rotate device to portrait mode.";
+                color: white;
+            }
+        }
+
+        @media screen and (max-device-width: 480px) and (orientation: portrait) {
+            #container {
+                display: block;
             }
 
-            #renderer-map {
-                display: none !important;
+            body::before {
+                content: none;
             }
         }
     </style>
 </head>
 <body>
-<div id="container">
-    <div id="renderer-cam">
-        <canvas id="renderer-video"></canvas>
-    </div>
-    <div id="renderer-map"></div>
+<div id="container"></div>
+<div id="overlay">
+    <button id="start_button">Start</button>
+    <div id="splash"></div>
 </div>
 <script type="module">
     import { Stats } from "./assets/stats.js";
     import { AlvaAR } from './assets/alva_ar.js';
-    import { ARSimpleView, ARSimpleMap } from "./assets/view.js";
-    import { Video, onFrame } from "./assets/utils.js";
+    import { ARCamIMUView } from "./assets/view.js";
+    import { IMU } from "./assets/imu.js";
+    import { Camera, onFrame, resize2cover } from "./assets/utils.js";
 
-    async function main()
+    function main()
     {
-        document.body.appendChild( Stats.el );
-        Stats.add( 'total' );
-        Stats.add( 'video' );
-        Stats.add( 'slam' );
+        const config = {
+            video: {
+                facingMode: 'environment',
+                aspectRatio: 16 / 9,
+                width: { ideal: 1280 }
+            },
+            audio: false
+        }
 
-        const media = await Video.Initialize( './assets/video.mp4' );
-        const alva = await AlvaAR.Initialize( media.width, media.height );
+        const $container = document.getElementById( 'container' );
+        const $view = document.createElement( 'div' );
+        const $canvas = document.createElement( 'canvas' );
+        const $overlay = document.getElementById( 'overlay' );
+        const $start = document.getElementById( 'start_button' );
+        const $splash = document.getElementById( 'splash' );
+        const splashFadeTime = 800;
 
-        const $cam = document.getElementById( 'renderer-cam' );
-        const $map = document.getElementById( 'renderer-map' );
-        const ctx = document.getElementById( 'renderer-video' ).getContext( '2d' );
+        $splash.style.transition = `opacity ${ splashFadeTime / 1000 }s ease`;
+        $splash.style.opacity = 0;
 
-        ctx.canvas.width = media.width;
-        ctx.canvas.height = media.height;
-
-        const mapRenderer = new ARSimpleMap( $map, media.width, media.height );
-        const camRenderer = new ARSimpleView( $cam, media.width, media.height, mapRenderer );
-
-        let doFindPlane = false;
-
-        $cam.addEventListener( 'click', ( event ) => doFindPlane = true );
-        $cam.parentElement.style.display = 'block';
-
-        media.el.play();
-        media.el.loop = false;
-        media.el.onended = ( event ) =>
+        async function demo( media, imu )
         {
-            media.el.load();
-            media.el.play();
-            camRenderer.reset();
-        };
+            const $video = media.el;
 
-        onFrame( () =>
-        {
-            Stats.next();
-            Stats.start( 'total' );
+            const size = resize2cover( $video.videoWidth, $video.videoHeight, $container.clientWidth, $container.clientHeight );
 
-            Stats.start( 'video' );
-            const frame = media.getImageData();
-            ctx.clearRect( 0, 0, media.width, media.height );
-            ctx.putImageData( frame, 0, 0 );
-            Stats.stop( 'video' );
+            $canvas.width = $container.clientWidth;
+            $canvas.height = $container.clientHeight;
+            $video.style.width = size.width + 'px';
+            $video.style.height = size.height + 'px';
 
-            Stats.start( 'slam' );
-            const pose = alva.findCameraPose( frame );
-            Stats.stop( 'slam' );
+            const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
+            const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
+            const view = new ARCamIMUView( $view, $canvas.width, $canvas.height );
 
-            if( pose )
+            Stats.add( 'total' );
+            Stats.add( 'video' );
+            Stats.add( 'slam' );
+
+            $container.appendChild( $canvas );
+            $container.appendChild( $view );
+
+            document.body.appendChild( Stats.el );
+            document.body.addEventListener( "click", ( e ) => view.addObjectAt( e.clientX, e.clientY ), false );
+            document.body.addEventListener( "dblclick", ( e ) => alva.reset(), false );
+
+            onFrame( () =>
             {
-                camRenderer.updateCameraPose( pose );
+                Stats.next();
+                Stats.start( 'total' );
 
-                if( doFindPlane )
+                ctx.clearRect( 0, 0, $canvas.width, $canvas.height );
+
+                if( !document['hidden'] )
                 {
-                    const planePose = alva.findPlane();
+                    Stats.start( 'video' );
+                    ctx.drawImage( $video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height );
+                    const frame = ctx.getImageData( 0, 0, $canvas.width, $canvas.height );
+                    Stats.stop( 'video' );
 
-                    if( planePose )
+                    Stats.start( 'slam' );
+                    const pose = alva.findCameraPoseWithIMU( frame, imu.orientation, imu.motion );
+                    Stats.stop( 'slam' );
+
+                    if( pose )
                     {
-                        camRenderer.createObjectWithPose( planePose );
-                        doFindPlane = false;
+                        view.updateCameraPose( pose );
+                    }
+                    else
+                    {
+                        view.lostCamera();
+
+                        const dots = alva.getFramePoints();
+
+                        for( const p of dots )
+                        {
+                            ctx.fillStyle = 'white';
+                            ctx.fillRect( p.x, p.y, 2, 2 );
+                        }
                     }
                 }
-            }
-            else
+
+                Stats.stop( 'total' );
+                Stats.render();
+
+                return true;
+            }, 30 );
+        }
+
+        setTimeout( () =>
+        {
+            $splash.remove();
+
+            $start.addEventListener( 'click', async () =>
             {
-                camRenderer.lostCamera();
-
-                const dots = alva.getFramePoints();
-
-                for( const p of dots )
+                try
                 {
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect( p.x, p.y, 2, 2 );
+                    $overlay.remove();
+
+                    const imu = await IMU.Initialize();
+                    const cam = await Camera.Initialize( config );
+
+                    await demo( cam, imu );
+                } catch( error )
+                {
+                    alert( 'Error: ' + error );
                 }
-            }
+            }, { once: true } );
 
-            Stats.stop( 'total' );
-            Stats.render();
-
-            return true;
-        }, 30 );
+        }, splashFadeTime );
     }
 
     window.addEventListener( 'load', main );
