@@ -1,57 +1,64 @@
 import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
+import { GLTFLoader } from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/examples/jsm/loaders/GLTFLoader.js';  // Aggiungi GLTFLoader
 import { OrbitControls } from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/examples/jsm/controls/OrbitControls.js';
 import { AlvaARConnectorTHREE } from './alva_ar_three.js'
 
 class ARCamView
 {
-    constructor( container, width, height, x = 0, y = 0, z = -10, scale = 1.0)
-    {
-        this.applyPose = AlvaARConnectorTHREE.Initialize( THREE );
+    constructor(container, width, height, x = 0, y = 0, z = -10, scale = 1.0) {
+        this.applyPose = AlvaARConnectorTHREE.Initialize(THREE);
 
-        this.renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
-        this.renderer.setClearColor( 0, 0 );
-        this.renderer.setSize( width, height );
-        this.renderer.setPixelRatio( window.devicePixelRatio );
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setClearColor(0, 0);
+        this.renderer.setSize(width, height);
+        this.renderer.setPixelRatio(window.devicePixelRatio);
 
-        this.camera = new THREE.PerspectiveCamera( 75, width / height, 0.1, 1000 );
-        this.camera.rotation.reorder( 'YXZ' );
+        this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+        this.camera.rotation.reorder('YXZ');
         this.camera.updateProjectionMatrix();
 
-        this.object = new THREE.Mesh( new THREE.IcosahedronGeometry( 1, 0 ), new THREE.MeshNormalMaterial( { flatShading: true } ) );
-        this.object.scale.set( scale, scale, scale );
-        this.object.position.set( x, y, z );
-        this.object.visible = false;
-
         this.scene = new THREE.Scene();
-        this.scene.add( new THREE.AmbientLight( 0x808080 ) );
-        this.scene.add( new THREE.HemisphereLight( 0x404040, 0xf0f0f0, 1 ) );
-        this.scene.add( this.camera );
-        this.scene.add( this.object );
+        this.scene.add(new THREE.AmbientLight(0x808080));
+        this.scene.add(new THREE.HemisphereLight(0x404040, 0xf0f0f0, 1));
+        this.scene.add(this.camera);
 
-        container.appendChild( this.renderer.domElement );
+        container.appendChild(this.renderer.domElement);
 
-        const render = () =>
-        {
-            requestAnimationFrame( render.bind( this ) );
+        // Caricamento del modello ASTRONAVE.glb
+        const loader = new GLTFLoader();
+        loader.load('./ASTRONAVE.glb', (gltf) => {
+            this.object = gltf.scene;
+            this.object.scale.set(scale, scale, scale); // Imposta la scala
+            this.object.position.set(x, y, z); // Imposta la posizione
+            this.object.visible = false; // Lo rendiamo visibile solo quando necessario
+            this.scene.add(this.object); // Aggiungi l'oggetto alla scena
+        }, undefined, function (error) {
+            console.error(error);
+        });
 
-            this.renderer.render( this.scene, this.camera );
+        const render = () => {
+            requestAnimationFrame(render.bind(this));
+            this.renderer.render(this.scene, this.camera);
         }
 
         render();
     }
 
-    updateCameraPose( pose )
-    {
-        this.applyPose( pose, this.camera.quaternion, this.camera.position );
+    updateCameraPose(pose) {
+        this.applyPose(pose, this.camera.quaternion, this.camera.position);
 
-        this.object.visible = true;
+        if (this.object) {
+            this.object.visible = true;
+        }
     }
 
-    lostCamera()
-    {
-        this.object.visible = false;
+    lostCamera() {
+        if (this.object) {
+            this.object.visible = false;
+        }
     }
 }
+
 
 class ARCamIMUView
 {
